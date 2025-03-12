@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish
 
 on:
   release:
@@ -11,32 +11,41 @@ on:
         default: ""
 
 jobs:
-  deploy:
+  build:
+    name: Build dist
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: 3.13
+
+      - name: Build package
+        run: uv build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${package_name}-python-dist
+          path: dist/
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${package_name}
     permissions:
       id-token: write # Required for PyPI trusted publishing
     steps:
-      - uses: actions/checkout@v4
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
+          name: ${package_name}-python-dist
+          path: dist/
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Install build tools
-        run: |
-          uv pip install build
-
-      - name: Build package
-        run: |
-          python -m build
-
-      - name: Publish to PyPI
+      - name: Publish dist to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

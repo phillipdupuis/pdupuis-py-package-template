@@ -2,9 +2,7 @@ name: Lint
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -13,21 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Lint
+        uses: astral-sh/ruff-action@v3
         with:
-          python-version: "3.13"
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Install dependencies
-        run: |
-          uv pip install ruff
-
-      - name: Lint with ruff
-        run: |
-          ruff check src/${import_name}/ tests/
-          ruff format --check src/${import_name}/ tests/
+          src: ./src

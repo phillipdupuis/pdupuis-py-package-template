@@ -3,80 +3,99 @@
 """Initialize a Python package template by replacing placeholders in files and filenames."""
 
 import argparse
-import fnmatch
 import os
 import shutil
 import subprocess
-from dataclasses import dataclass
-from datetime import datetime
+import tempfile
+from contextlib import ContextDecorator
 from pathlib import Path
+from typing import Any, TypedDict
 
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+REWRITE_FILES = [
+    ".github/workflows/lint.yml",
+    ".github/workflows/publish.yml",
+    ".github/dependabot.yml",
+    "src/${project_name}/__init__.py",
+    "tests/__init__.py",
+    "pyproject.toml",
+    "README.md",
+]
 
-@dataclass
-class Args:
-    name: str
-    author: str
-    email: str
-    description: str
-    github: str
-
-
-def get_git_config(key: str, default: str | None = None):
-    """Get a git config value, or return the default if not found."""
-    try:
-        return (
-            subprocess.check_output(["git", "config", "--get", key], text=True).strip() or default
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return default
+RENAME_PATHS = ["src/${project_name}"]
 
 
-def get_gitignore_patterns() -> list[str]:
-    """Parse the .gitignore file and return a list of patterns."""
-    gitignore_path = Path(".gitignore")
-    if gitignore_path.exists():
-        lines = [line.strip() for line in gitignore_path.read_text().splitlines()]
-        return [line for line in lines if line and not line.startswith("#")]
-    return []
+Replacements = TypedDict(
+    "Replacements",
+    {
+        r"${project_name}": str,
+        r"${author}": str,
+        r"${email}": str,
+        r"${description}": str,
+        r"${github_username}": str,
+    },
+)
 
 
-def is_ignored(path: Path, gitignore_patterns: list[str]) -> bool:
-    """Check if a path should be ignored based on gitignore patterns."""
-    path = path.resolve().relative_to(PROJECT_ROOT)
+class cwd(ContextDecorator):
+    """Context manager for temporarily changing the current working directory."""
 
-    if ".git" in path.parts or ".github" in path.parts:
-        return True
+    def __init__(self, path: Path):
+        self.path = path.resolve()
 
-    path_str = str(path.relative_to(Path.cwd()))
+    def __enter__(self):
+        self.old_cwd = Path.cwd()
+        os.chdir(self.path)
 
-    for pattern in gitignore_patterns:
-        # Handle directory patterns (ending with /)
-        if pattern.endswith("/"):
-            if path.is_dir() and fnmatch.fnmatch(path_str + "/", pattern + "*"):
-                return True
-        # Use fnmatch for glob pattern matching
-        elif fnmatch.fnmatch(path_str, pattern):
-            return True
-
-    return False
+    def __exit__(self, *exc: Any):
+        os.chdir(self.old_cwd)
 
 
-def parse_args() -> Args:
+@cwd(PROJECT_ROOT)
+def main(replacements: Replacements) -> None:
+    """Main function to initialize the library template."""
+
+    print("Initializing template with replacements:")
+    for key, value in replacements.items():
+        print(f"  {key} -> {value}")
+
+    print("Replacing placeholders in files...")
+    for file in REWRITE_FILES:
+        rewrite_file(Path(file), replacements)
+
+    print("Updating path names...")
+    for path in RENAME_PATHS:
+        rename_path(Path(path), replacements)
+
+    set_codecov_token_secret_in_github()
+
+    print(f"'{replacements['${project_name}']}' is ready to use.")
+
+
+def parse_args() -> Replacements:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Replace placeholders in a Python package template"
+        description="Replace placeholders in a Python library template"
     )
-    parser.add_argument("-n", "--name", required=True, help="Package name (snake_case recommended)")
+    parser.add_argument("-n", "--name", required=True, help="Library name (snake_case recommended)")
     parser.add_argument(
-        "-a", "--author", default=get_git_config("user.name", "Your Name"), help="Author name"
+        "-a",
+        "--author",
+        required=True,
+        help="Author name",
     )
     parser.add_argument(
         "-e",
         "--email",
-        default=get_git_config("user.email", "your.email@example.com"),
+        required=True,
         help="Author email",
+    )
+    parser.add_argument(
+        "-g",
+        "--github",
+        required=True,
+        help="GitHub username",
     )
     parser.add_argument(
         "-d",
@@ -84,145 +103,84 @@ def parse_args() -> Args:
         default="A Python package",
         help="Short package description",
     )
-    parser.add_argument(
-        "-g",
-        "--github",
-        default=None,
-        help="GitHub username",
-    )
-
     args = parser.parse_args()
-
-    # If GitHub username is not provided, try to derive it from email or use system username
-    if args.github is None:
-        if "@" in args.email:
-            args.github = args.email.split("@")[0]
-        else:
-            import getpass
-
-            args.github = getpass.getuser()
-
-    return Args(
-        name=args.name,
-        author=args.author,
-        email=args.email,
-        description=args.description,
-        github=args.github,
-    )
+    return {
+        "${project_name}": args.name,
+        "${author}": args.author,
+        "${email}": args.email,
+        "${description}": args.description,
+        "${github_username}": args.github,
+    }
 
 
-def confirm_replacements(replacements: dict[str, str]) -> None:
-    """Display the planned replacements and ask for confirmation."""
-    print("Initializing template with:")
-    for key, value in replacements.items():
-        print(f"  {key}: {value}")
-    print("\nPress Enter to continue or Ctrl+C to cancel...")
-    input()
+def confirm(message: str) -> bool:
+    """Ask the user for confirmation before proceeding."""
+    response = input(f"{message}\n[y/n]: ")
+    return response.lower() == "y"
 
 
-def replace_in_file(path: Path, replacements: dict[str, str]) -> None:
-    """Replace all placeholders in a file."""
+def rewrite_file(path: Path, replacements: Replacements) -> None:
+    """Replace all placeholders in a file text contents."""
     try:
         text = path.read_text(encoding="utf-8")
-        for key, value in replacements.items():
-            text = text.replace(key, value)
+        placeholders = [k for k in replacements.keys() if k in text]
+        if not placeholders:
+            return
+
+        for placeholder in placeholders:
+            value = replacements[placeholder]  # type: ignore
+            assert isinstance(value, str)
+            text = text.replace(placeholder, value)
+
         path.write_text(text, encoding="utf-8")
         print(f"Updated {path}")
+
     except UnicodeDecodeError:
         print(f"  Skipping binary file: {path}")
+
     except Exception as e:
         print(f"  Error processing {path}: {e}")
 
 
-def rename_files_and_dirs(directory: Path, replacements: dict[str, str]) -> None:
-    """Rename files and directories with placeholders in their names."""
-    # Process all files (including hidden ones)
-    for root, dirs, files in os.walk(directory, topdown=False):
-        # Process files first
-        for file in files:
-            file_path = os.path.join(root, file)
-            if "${" in file:
-                new_name = file
-                for placeholder, value in replacements.items():
-                    new_name = new_name.replace(placeholder, value)
+def rename_path(path: Path, replacements: Replacements) -> None:
+    """Replace all placeholders in a file or directory name."""
+    placeholders = [k for k in replacements.keys() if k in path.name]
+    if not placeholders:
+        return
 
-                new_path = os.path.join(root, new_name)
-                if file_path != new_path:
-                    print(f"Renaming: {file_path} -> {new_path}")
-                    os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                    shutil.move(file_path, new_path)
+    new_path = path.with_name(path.name)
+    for placeholder in placeholders:
+        value = replacements[placeholder]  # type: ignore
+        assert isinstance(value, str)
+        new_path = new_path.with_name(new_path.name.replace(placeholder, value))
 
-        # Then process directories (bottom-up)
-        for dir_name in dirs:
-            dir_path = os.path.join(root, dir_name)
-            if "${" in dir_name:
-                new_name = dir_name
-                for placeholder, value in replacements.items():
-                    new_name = new_name.replace(placeholder, value)
-
-                new_path = os.path.join(root, new_name)
-                if dir_path != new_path:
-                    print(f"Renaming directory: {dir_path} -> {new_path}")
-                    if not os.path.exists(new_path):
-                        os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                        shutil.move(dir_path, new_path)
+    shutil.move(path, new_path)
+    print(f"Renamed: {path} -> {new_path}")
 
 
-def main():
-    """Main function to initialize the template."""
-    args = parse_args()
+def set_codecov_token_secret_in_github():
+    """Attempt to set the CODECOV_TOKEN secret for use in GitHub Actions."""
+    token = os.environ.get("CODECOV_TOKEN")
 
-    # Generate derived replacements
-    import_name = args.name.replace("-", "_")
-    package_title = import_name  # Keep it simple
-    current_year = str(datetime.now().year)
+    if not token:
+        print("No CODECOV_TOKEN environment variable found.")
+        return
 
-    # Create replacements dictionary and confirm them
-    replacements = {
-        r"${package_name}": args.name,
-        r"${import_name}": import_name,
-        r"${package_title}": package_title,
-        r"${author}": args.author,
-        r"${email}": args.email,
-        r"${description}": args.description,
-        r"${github_username}": args.github,
-        r"${year}": current_year,
-    }
-    confirm_replacements(replacements)
+    if not confirm(
+        "It appears a CODECOV_TOKEN environment variable is defined.\n"
+        "Would you like to set it as the CODECOV_TOKEN secret in GitHub Actions?"
+    ):
+        return
 
-    # Step 1: Replace placeholders in file contents
-    print("Step 1: Replacing placeholders in file contents...")
-    script_path = Path(__file__).resolve()
-
-    for file_path in Path(".").rglob("*"):
-        file_path = file_path.resolve()
-        if (
-            file_path.is_file()
-            and ".git" not in file_path.parts
-            and ".github" not in file_path.parts
-            and file_path != script_path
-        ):
-            replace_in_file(file_path, replacements)
-
-    # Step 2: Rename files and directories with placeholders
-    print("Step 2: Renaming files and directories with placeholders...")
-    rename_files_and_dirs(Path(".").resolve(), replacements)
-
-    # Step 3: Remove this script if it's in the template repo
-    if script_path.exists():
-        print("Step 3: Removing initialization script...")
-        os.remove(script_path)
-
-    # Step 4: Create initial git repository if needed
-    if not os.path.exists(".git"):
-        print("Step 4: Creating initial git repository...")
-        subprocess.run(["git", "init"], check=True)
-        subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", "Initial commit from template"], check=True)
-
-    print("Template initialization complete!")
-    print(f"Your Python package '{args.name}' is ready to use.")
+    with tempfile.NamedTemporaryFile(mode="w+t", delete=False) as token_file:
+        token_file.write(token)
+    try:
+        subprocess.run(["gh", "secret", "set", "CODECOV_TOKEN", "<", token_file.name], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to set CODECOV_TOKEN secret: {e}")
+    finally:
+        os.unlink(token_file.name)
 
 
 if __name__ == "__main__":
-    main()
+    main(parse_args())

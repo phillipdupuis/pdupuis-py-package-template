@@ -1,28 +1,28 @@
-# ${package_title}
+# ${project_name}
 
-[![PyPI version](https://badge.fury.io/py/${package_name}.svg)](https://badge.fury.io/py/${package_name})
-[![Test](https://github.com/${github_username}/${package_name}/actions/workflows/test.yml/badge.svg)](https://github.com/${github_username}/${package_name}/actions/workflows/test.yml)
-[![Lint](https://github.com/${github_username}/${package_name}/actions/workflows/lint.yml/badge.svg)](https://github.com/${github_username}/${package_name}/actions/workflows/lint.yml)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![PyPI version](https://badge.fury.io/py/${project_name}.svg)](https://badge.fury.io/py/${project_name})
+[![Test](https://github.com/${github_username}/${project_name}/actions/workflows/test.yml/badge.svg)](https://github.com/${github_username}/${project_name}/actions/workflows/test.yml)
+[![Lint](https://github.com/${github_username}/${project_name}/actions/workflows/lint.yml/badge.svg)](https://github.com/${github_username}/${project_name}/actions/workflows/lint.yml)
+[![Coverage Status](https://codecov.io/github/${github_username}/${project_name}/branch/main/graph/badge.svg)](https://codecov.io/github/${github_username}/${project_name})
 
 ${description}
 
 ## Installation
 
 ```bash
-pip install ${package_name}
+pip install ${project_name}
 ```
 
 With [uv](https://github.com/astral-sh/uv):
 
 ```bash
-uv pip install ${package_name}
+uv pip install ${project_name}
 ```
 
 ## Usage
 
 ```python
-import ${import_name}
+import ${project_name}
 
 # Add usage examples here
 ```
@@ -39,8 +39,8 @@ This project uses modern Python tooling:
 
 ```bash
 # Clone the repository
-git clone https://github.com/${github_username}/${package_name}.git
-cd ${package_name}
+git clone https://github.com/${github_username}/${project_name}.git
+cd ${project_name}
 
 # Install development dependencies
 uv pip install -e ".[dev]"
