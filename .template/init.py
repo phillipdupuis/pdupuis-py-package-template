@@ -14,7 +14,6 @@ from typing import Any, TypedDict
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 REWRITE_FILES = [
-    ".github/workflows/lint.yml",
     ".github/workflows/publish.yml",
     ".github/dependabot.yml",
     "src/${project_name}/__init__.py",
@@ -60,17 +59,17 @@ def main(replacements: Replacements) -> None:
     for key, value in replacements.items():
         print(f"  {key} -> {value}")
 
-    print("Replacing placeholders in files...")
+    print("\nReplacing placeholders in files...")
     for file in REWRITE_FILES:
         rewrite_file(Path(file), replacements)
 
-    print("Updating path names...")
+    print("\nUpdating path names...")
     for path in RENAME_PATHS:
         rename_path(Path(path), replacements)
 
     set_codecov_token_secret_in_github()
 
-    print(f"'{replacements['${project_name}']}' is ready to use.")
+    print(f"\n'{replacements['${project_name}']}' is ready to use.")
 
 
 def parse_args() -> Replacements:
@@ -145,6 +144,8 @@ def rewrite_file(path: Path, replacements: Replacements) -> None:
 
 def rename_path(path: Path, replacements: Replacements) -> None:
     """Replace all placeholders in a file or directory name."""
+    path = path.resolve().relative_to(".")
+
     placeholders = [k for k in replacements.keys() if k in path.name]
     if not placeholders:
         print(f"No placeholders found in path: {path}")
@@ -156,7 +157,7 @@ def rename_path(path: Path, replacements: Replacements) -> None:
         assert isinstance(value, str)
         new_path = new_path.with_name(new_path.name.replace(placeholder, value))
 
-    shutil.move(path, new_path)
+    shutil.move(path.resolve(), new_path.resolve())
     print(f"Renamed: {path} -> {new_path}")
 
 
