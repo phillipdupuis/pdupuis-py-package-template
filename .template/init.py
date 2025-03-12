@@ -144,21 +144,21 @@ def rewrite_file(path: Path, replacements: Replacements) -> None:
 
 def rename_path(path: Path, replacements: Replacements) -> None:
     """Replace all placeholders in a file or directory name."""
-    path = path.resolve().relative_to(".")
+    path_str = str(path)
 
-    placeholders = [k for k in replacements.keys() if k in path.name]
+    placeholders = [k for k in replacements.keys() if k in path_str]
     if not placeholders:
         print(f"No placeholders found in path: {path}")
         return
 
-    new_path = path.with_name(path.name)
+    new_path = path_str
     for placeholder in placeholders:
         value = replacements[placeholder]  # type: ignore
         assert isinstance(value, str)
-        new_path = new_path.with_name(new_path.name.replace(placeholder, value))
+        new_path = new_path.replace(placeholder, value)
 
-    shutil.move(path.resolve(), new_path.resolve())
-    print(f"Renamed: {path} -> {new_path}")
+    shutil.move(path_str, new_path)
+    print(f"Renamed: {path_str} -> {new_path}")
 
 
 def set_codecov_token_secret_in_github():
