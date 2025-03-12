@@ -28,7 +28,7 @@ jobs:
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${package_name}-python-dist
+          name: ${project_name}-python-dist
           path: dist/
 
   publish-to-pypi:
@@ -37,14 +37,14 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/${package_name}
+      url: https://pypi.org/project/${project_name}
     permissions:
       id-token: write # Required for PyPI trusted publishing
     steps:
       - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${package_name}-python-dist
+          name: ${project_name}-python-dist
           path: dist/
 
       - name: Publish dist to PyPI

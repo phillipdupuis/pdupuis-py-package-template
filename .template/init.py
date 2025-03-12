@@ -125,6 +125,7 @@ def rewrite_file(path: Path, replacements: Replacements) -> None:
         text = path.read_text(encoding="utf-8")
         placeholders = [k for k in replacements.keys() if k in text]
         if not placeholders:
+            print(f"No placeholders found in file: {path}")
             return
 
         for placeholder in placeholders:
@@ -146,6 +147,7 @@ def rename_path(path: Path, replacements: Replacements) -> None:
     """Replace all placeholders in a file or directory name."""
     placeholders = [k for k in replacements.keys() if k in path.name]
     if not placeholders:
+        print(f"No placeholders found in path: {path}")
         return
 
     new_path = path.with_name(path.name)
